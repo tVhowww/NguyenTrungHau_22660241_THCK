@@ -17,7 +17,13 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { getDb, initContactsTable, createContact, toggleFavorite } from "@/db";
+import {
+  getDb,
+  initContactsTable,
+  createContact,
+  toggleFavorite,
+  updateContact,
+} from "@/db";
 
 interface Contact {
   id: number;
@@ -34,8 +40,11 @@ export default function HomeScreen() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // ====== state cho Câu 4 – form thêm liên hệ ======
+  // ====== state cho Modal thêm/sửa (C4 + C6) ======
   const [addVisible, setAddVisible] = useState(false);
+  const [modalMode, setModalMode] = useState<"add" | "edit">("add");
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
+
   const [nameInput, setNameInput] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
   const [emailInput, setEmailInput] = useState("");
@@ -85,18 +94,32 @@ export default function HomeScreen() {
   }, [loadContacts]);
 
   // ===== UI 1 item contact =====
-    const renderItem = ({ item }: { item: Contact }) => (
-    <View style={styles.card}>
+  const renderItem = ({ item }: { item: Contact }) => (
+    <TouchableOpacity
+      style={styles.card}
+      onLongPress={() => openEditModal(item)} // C6: nhấn giữ để sửa
+      activeOpacity={0.8}
+    >
       <View style={{ flex: 1 }}>
-        <Text style={styles.name}>{item.name}</Text>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.name}>{item.name}</Text>
+
+          {/* Nút "Sửa" – C6 */}
+          <TouchableOpacity onPress={() => openEditModal(item)}>
+            <Text style={styles.editText}>Sửa</Text>
+          </TouchableOpacity>
+        </View>
+
         {item.phone ? (
           <Text style={styles.phone}>{item.phone}</Text>
         ) : (
           <Text style={styles.phone}>Không có số điện thoại</Text>
         )}
+
         <Text style={styles.created}>
           Tạo lúc: {new Date(item.created_at).toLocaleString()}
         </Text>
+
         {item.email ? (
           <Text style={styles.email}>Email: {item.email}</Text>
         ) : null}
@@ -111,9 +134,8 @@ export default function HomeScreen() {
           ★
         </Text>
       </TouchableOpacity>
-    </View>
+    </TouchableOpacity>
   );
-
 
   const renderEmpty = () => {
     if (loading) return null;
@@ -124,48 +146,7 @@ export default function HomeScreen() {
     );
   };
 
-  // ===== Xử lý form Câu 4 =====
-  const openAddModal = () => {
-    setNameInput("");
-    setPhoneInput("");
-    setEmailInput("");
-    setFormError(null);
-    setAddVisible(true);
-  };
-
-  const closeAddModal = () => {
-    setAddVisible(false);
-  };
-
-  const handleSaveContact = async () => {
-    // validate: name không rỗng
-    if (!nameInput.trim()) {
-      setFormError("Tên không được để trống");
-      return;
-    }
-
-    // validate cơ bản: phone nếu có thì chỉ gồm số
-    if (phoneInput && !/^[0-9]+$/.test(phoneInput.trim())) {
-      setFormError("Số điện thoại chỉ được chứa chữ số 0-9");
-      return;
-    }
-
-    try {
-      setFormError(null);
-      await createContact({
-        name: nameInput,
-        phone: phoneInput || null,
-        email: emailInput || null,
-      });
-      await loadContacts(); // reload list
-      closeAddModal();
-    } catch (e) {
-      console.error("createContact error", e);
-      setFormError("Không lưu được liên hệ, thử lại sau.");
-    }
-  };
-
-    // ===== Câu 5 – Toggle favorite =====
+  // ===== C5 – Toggle favorite =====
   const handleToggleFavorite = async (contact: Contact) => {
     try {
       await toggleFavorite(contact.id, contact.favorite);
@@ -176,6 +157,75 @@ export default function HomeScreen() {
     }
   };
 
+  // ===== C4 + C6 – Mở/đóng modal =====
+  const openAddModal = () => {
+    setModalMode("add");
+    setEditingContact(null);
+
+    setNameInput("");
+    setPhoneInput("");
+    setEmailInput("");
+    setFormError(null);
+
+    setAddVisible(true);
+  };
+
+  const openEditModal = (contact: Contact) => {
+    setModalMode("edit");
+    setEditingContact(contact);
+
+    setNameInput(contact.name);
+    setPhoneInput(contact.phone ?? "");
+    setEmailInput(contact.email ?? "");
+    setFormError(null);
+
+    setAddVisible(true);
+  };
+
+  const closeAddModal = () => {
+    setAddVisible(false);
+  };
+
+  // ===== C4 + C6 – Lưu contact (INSERT hoặc UPDATE) =====
+  const handleSaveContact = async () => {
+    // validate tên
+    if (!nameInput.trim()) {
+      setFormError("Tên không được để trống");
+      return;
+    }
+    // validate phone
+    if (phoneInput && !/^[0-9]+$/.test(phoneInput.trim())) {
+      setFormError("Số điện thoại chỉ được chứa chữ số 0-9");
+      return;
+    }
+
+    try {
+      setFormError(null);
+
+      if (modalMode === "add") {
+        // C4: thêm mới
+        await createContact({
+          name: nameInput,
+          phone: phoneInput || null,
+          email: emailInput || null,
+        });
+      } else if (modalMode === "edit" && editingContact) {
+        // C6: sửa contact
+        await updateContact({
+          id: editingContact.id,
+          name: nameInput,
+          phone: phoneInput || null,
+          email: emailInput || null,
+        });
+      }
+
+      await loadContacts();
+      closeAddModal();
+    } catch (e) {
+      console.error("saveContact error", e);
+      setFormError("Không lưu được liên hệ, thử lại sau.");
+    }
+  };
 
   // ===== trạng thái đang khởi tạo DB =====
   if (!ready) {
@@ -211,12 +261,12 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Nút + thêm liên hệ (Câu 4) */}
+      {/* Nút + thêm liên hệ (C4) */}
       <TouchableOpacity style={styles.fab} onPress={openAddModal}>
         <Text style={styles.fabText}>＋</Text>
       </TouchableOpacity>
 
-      {/* Modal thêm liên hệ mới */}
+      {/* Modal thêm/sửa liên hệ (C4 + C6) */}
       <Modal
         visible={addVisible}
         transparent
@@ -228,7 +278,9 @@ export default function HomeScreen() {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Thêm liên hệ mới</Text>
+            <Text style={styles.modalTitle}>
+              {modalMode === "add" ? "Thêm liên hệ mới" : "Sửa liên hệ"}
+            </Text>
 
             <Text style={styles.label}>Tên *</Text>
             <TextInput
@@ -308,6 +360,11 @@ const styles = StyleSheet.create({
     padding: 14,
     elevation: 2,
   },
+  cardHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   name: {
     fontSize: 16,
     fontWeight: "600",
@@ -325,6 +382,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
     color: "#6b7280",
     fontSize: 12,
+  },
+  editText: {
+    color: "#2563eb",
+    fontSize: 13,
   },
   favoriteBox: {
     width: 40,

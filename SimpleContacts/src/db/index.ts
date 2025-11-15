@@ -92,3 +92,29 @@ export const toggleFavorite = async (id: number, currentFavorite: number) => {
     [next, id]
   );
 };
+
+/**
+ * Câu 6 – UPDATE contact: name, phone, email
+ */
+export const updateContact = async (data: {
+  id: number;
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+}) => {
+  const db = await getDb();
+
+  await db.runAsync(
+    `
+      UPDATE contacts
+      SET name = ?, phone = ?, email = ?
+      WHERE id = ?;
+    `,
+    [
+      data.name.trim(),
+      data.phone?.trim() || null,
+      data.email?.trim() || null,
+      data.id,
+    ]
+  );
+};
