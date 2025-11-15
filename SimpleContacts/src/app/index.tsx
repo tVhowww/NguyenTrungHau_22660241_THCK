@@ -3,6 +3,7 @@ import React, {
   useEffect,
   useState,
   useCallback,
+  useMemo,
 } from "react";
 import {
   View,
@@ -41,7 +42,7 @@ export default function HomeScreen() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // ====== state cho Modal thêm/sửa (C4 + C6) ======
+  // ====== Modal thêm/sửa (C4 + C6) ======
   const [addVisible, setAddVisible] = useState(false);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
@@ -51,9 +52,13 @@ export default function HomeScreen() {
   const [emailInput, setEmailInput] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
-  // ====== state cho Modal xác nhận xóa ======
+  // ====== Modal xác nhận xóa (C7) ======
   const [deleteVisible, setDeleteVisible] = useState(false);
   const [deletingContact, setDeletingContact] = useState<Contact | null>(null);
+
+  // ====== C8 – Search & favorite filter ======
+  const [searchText, setSearchText] = useState("");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
 
   // ===== load danh sách từ DB =====
   const loadContacts = useCallback(async () => {
@@ -98,6 +103,22 @@ export default function HomeScreen() {
     };
   }, [loadContacts]);
 
+  // ===== C8 – Lọc realtime bằng useMemo =====
+  const filteredContacts = useMemo(() => {
+    const q = searchText.trim().toLowerCase();
+
+    return contacts.filter((c) => {
+      if (favoritesOnly && c.favorite !== 1) return false;
+
+      if (!q) return true;
+
+      const name = c.name?.toLowerCase() ?? "";
+      const phone = c.phone ?? "";
+
+      return name.includes(q) || phone.includes(q);
+    });
+  }, [contacts, searchText, favoritesOnly]);
+
   // ===== C5 – Toggle favorite =====
   const handleToggleFavorite = async (contact: Contact) => {
     try {
@@ -117,7 +138,7 @@ export default function HomeScreen() {
 
   const confirmDelete = async () => {
     if (!deletingContact) return;
-    
+
     try {
       await deleteContact(deletingContact.id);
       await loadContacts();
@@ -134,7 +155,7 @@ export default function HomeScreen() {
     setDeletingContact(null);
   };
 
-  // ===== C4 + C6 – Mở/đóng modal =====
+  // ===== C4 + C6 – Mở/đóng modal add/edit =====
   const openAddModal = () => {
     setModalMode("add");
     setEditingContact(null);
@@ -242,7 +263,7 @@ export default function HomeScreen() {
         ) : null}
       </View>
 
-      {/* Sao favorite – Câu 5 */}
+      {/* Sao favorite – C5 */}
       <TouchableOpacity
         style={styles.favoriteBox}
         onPress={() => handleToggleFavorite(item)}
@@ -256,9 +277,16 @@ export default function HomeScreen() {
 
   const renderEmpty = () => {
     if (loading) return null;
+
+    const hasFilter = searchText.trim().length > 0 || favoritesOnly;
+
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>Chưa có liên hệ nào.</Text>
+        <Text style={styles.emptyText}>
+          {hasFilter
+            ? "Không tìm thấy liên hệ phù hợp."
+            : "Chưa có liên hệ nào."}
+        </Text>
       </View>
     );
   };
@@ -276,10 +304,41 @@ export default function HomeScreen() {
   // ===== UI chính =====
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Danh sách liên hệ</Text>
+      {/* Header + Search + Favorite filter (C8) */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Danh sách liên hệ</Text>
+
+        <View style={styles.searchRow}>
+          <View style={styles.searchInputWrapper}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Tìm theo tên hoặc số điện thoại..."
+              value={searchText}
+              onChangeText={setSearchText}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.favoriteFilterButton,
+              favoritesOnly && styles.favoriteFilterButtonActive,
+            ]}
+            onPress={() => setFavoritesOnly((prev) => !prev)}
+          >
+            <Text
+              style={[
+                styles.favoriteFilterText,
+                favoritesOnly && styles.favoriteFilterTextActive,
+              ]}
+            >
+              ★
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
       <FlatList
-        data={contacts}
+        data={filteredContacts}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderItem}
         ListEmptyComponent={renderEmpty}
@@ -287,7 +346,7 @@ export default function HomeScreen() {
           <RefreshControl refreshing={loading} onRefresh={loadContacts} />
         }
         contentContainerStyle={
-          contacts.length === 0 ? { flex: 1 } : { paddingBottom: 80 }
+          filteredContacts.length === 0 ? { flex: 1 } : { paddingBottom: 80 }
         }
       />
 
@@ -302,7 +361,7 @@ export default function HomeScreen() {
         <Text style={styles.fabText}>＋</Text>
       </TouchableOpacity>
 
-      {/* Modal thêm/sửa liên hệ (C4 + C6) */}
+      {/* Modal thêm/sửa (C4 + C6) */}
       <Modal
         visible={addVisible}
         transparent
@@ -364,7 +423,7 @@ export default function HomeScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Modal xác nhận xóa */}
+      {/* Modal xác nhận xóa (C7) */}
       <Modal
         visible={deleteVisible}
         transparent
@@ -377,15 +436,15 @@ export default function HomeScreen() {
             <Text style={styles.deleteModalText}>
               Bạn có chắc muốn xóa liên hệ "{deletingContact?.name}"?
             </Text>
-            
+
             <View style={styles.deleteModalButtons}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.cancelButton}
                 onPress={cancelDelete}
               >
                 <Text style={styles.cancelButtonText}>Hủy</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.deleteButton}
                 onPress={confirmDelete}
               >
@@ -412,12 +471,51 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingTop: 50,
-    paddingBottom: 16,
+    paddingBottom: 12,
     paddingHorizontal: 16,
+    backgroundColor: "#111827",
+  },
+  headerTitle: {
     fontSize: 22,
     fontWeight: "700",
-    backgroundColor: "#111827",
     color: "white",
+    marginBottom: 8,
+  },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  searchInputWrapper: {
+    flex: 1,
+    marginRight: 8,
+  },
+  searchInput: {
+    backgroundColor: "white",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 14,
+  },
+  favoriteFilterButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#9ca3af",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#111827",
+  },
+  favoriteFilterButtonActive: {
+    backgroundColor: "#facc15",
+    borderColor: "#facc15",
+  },
+  favoriteFilterText: {
+    color: "#e5e7eb",
+    fontSize: 20,
+  },
+  favoriteFilterTextActive: {
+    color: "#111827",
   },
   card: {
     flexDirection: "row",
@@ -500,7 +598,7 @@ const styles = StyleSheet.create({
     fontSize: 30,
     lineHeight: 32,
   },
-  // Modal
+  // Modal chung
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.35)",
