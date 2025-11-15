@@ -1,0 +1,55 @@
+// src/db/index.ts
+import * as SQLite from "expo-sqlite";
+
+let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+
+// Mở connection
+export const getDb = () => {
+  if (!dbPromise) {
+    dbPromise = SQLite.openDatabaseAsync("simple_contacts.db");
+  }
+  return dbPromise;
+};
+
+// Tạo bảng + seed
+export const initContactsTable = async () => {
+  const db = await getDb();
+
+  // 1. Tạo bảng
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS contacts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      phone TEXT,
+      email TEXT,
+      favorite INTEGER DEFAULT 0,
+      created_at INTEGER
+    );
+  `);
+
+  // 2. Kiểm tra dữ liệu
+  const row = await db.getFirstAsync<{ count: number }>(
+    "SELECT COUNT(*) AS count FROM contacts;"
+  );
+  const count = row?.count ?? 0;
+
+  // 3. Seed nếu không có dữ liệu
+  if (count === 0) {
+    const now = Date.now();
+
+    await db.runAsync(
+      "INSERT INTO contacts (name, phone, email, favorite, created_at) VALUES (?, ?, ?, ?, ?);",
+      ["Nguyễn Văn A", "0901234567", "a@example.com", 0, now]
+    );
+
+    await db.runAsync(
+      "INSERT INTO contacts (name, phone, email, favorite, created_at) VALUES (?, ?, ?, ?, ?);",
+      ["Trần Thị B", "0987654321", "b@example.com", 1, now + 1]
+    );
+
+    await db.runAsync(
+      "INSERT INTO contacts (name, phone, email, favorite, created_at) VALUES (?, ?, ?, ?, ?);",
+      ["Lê Văn C", "0912345678", null, 0, now + 2]
+    );
+  }
+};
