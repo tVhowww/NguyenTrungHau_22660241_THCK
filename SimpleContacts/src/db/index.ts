@@ -118,3 +118,11 @@ export const updateContact = async (data: {
     ]
   );
 };
+
+/**
+ * Câu 7 – Xóa liên hệ khỏi bảng contacts
+ */
+export const deleteContact = async (id: number) => {
+  const db = await getDb();
+  await db.runAsync("DELETE FROM contacts WHERE id = ?;", [id]);
+};

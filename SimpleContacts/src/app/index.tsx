@@ -23,6 +23,7 @@ import {
   createContact,
   toggleFavorite,
   updateContact,
+  deleteContact,
 } from "@/db";
 
 interface Contact {
@@ -49,6 +50,10 @@ export default function HomeScreen() {
   const [phoneInput, setPhoneInput] = useState("");
   const [emailInput, setEmailInput] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+
+  // ====== state cho Modal xác nhận xóa ======
+  const [deleteVisible, setDeleteVisible] = useState(false);
+  const [deletingContact, setDeletingContact] = useState<Contact | null>(null);
 
   // ===== load danh sách từ DB =====
   const loadContacts = useCallback(async () => {
@@ -93,21 +98,133 @@ export default function HomeScreen() {
     };
   }, [loadContacts]);
 
+  // ===== C5 – Toggle favorite =====
+  const handleToggleFavorite = async (contact: Contact) => {
+    try {
+      await toggleFavorite(contact.id, contact.favorite);
+      await loadContacts();
+    } catch (e) {
+      console.error("toggleFavorite error", e);
+      setError("Không cập nhật được trạng thái yêu thích");
+    }
+  };
+
+  // ===== C7 – Xóa contact với Modal xác nhận =====
+  const handleDeleteContact = (contact: Contact) => {
+    setDeletingContact(contact);
+    setDeleteVisible(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deletingContact) return;
+    
+    try {
+      await deleteContact(deletingContact.id);
+      await loadContacts();
+      setDeleteVisible(false);
+      setDeletingContact(null);
+    } catch (e) {
+      console.error("deleteContact error", e);
+      setError("Không xóa được liên hệ");
+    }
+  };
+
+  const cancelDelete = () => {
+    setDeleteVisible(false);
+    setDeletingContact(null);
+  };
+
+  // ===== C4 + C6 – Mở/đóng modal =====
+  const openAddModal = () => {
+    setModalMode("add");
+    setEditingContact(null);
+
+    setNameInput("");
+    setPhoneInput("");
+    setEmailInput("");
+    setFormError(null);
+
+    setAddVisible(true);
+  };
+
+  const openEditModal = (contact: Contact) => {
+    setModalMode("edit");
+    setEditingContact(contact);
+
+    setNameInput(contact.name);
+    setPhoneInput(contact.phone ?? "");
+    setEmailInput(contact.email ?? "");
+    setFormError(null);
+
+    setAddVisible(true);
+  };
+
+  const closeAddModal = () => {
+    setAddVisible(false);
+  };
+
+  // ===== C4 + C6 – Lưu contact (INSERT hoặc UPDATE) =====
+  const handleSaveContact = async () => {
+    if (!nameInput.trim()) {
+      setFormError("Tên không được để trống");
+      return;
+    }
+    if (phoneInput && !/^[0-9]+$/.test(phoneInput.trim())) {
+      setFormError("Số điện thoại chỉ được chứa chữ số 0-9");
+      return;
+    }
+
+    try {
+      setFormError(null);
+
+      if (modalMode === "add") {
+        await createContact({
+          name: nameInput,
+          phone: phoneInput || null,
+          email: emailInput || null,
+        });
+      } else if (modalMode === "edit" && editingContact) {
+        await updateContact({
+          id: editingContact.id,
+          name: nameInput,
+          phone: phoneInput || null,
+          email: emailInput || null,
+        });
+      }
+
+      await loadContacts();
+      closeAddModal();
+    } catch (e) {
+      console.error("saveContact error", e);
+      setFormError("Không lưu được liên hệ, thử lại sau.");
+    }
+  };
+
   // ===== UI 1 item contact =====
   const renderItem = ({ item }: { item: Contact }) => (
     <TouchableOpacity
       style={styles.card}
-      onLongPress={() => openEditModal(item)} // C6: nhấn giữ để sửa
+      onLongPress={() => openEditModal(item)} // giữ để sửa
       activeOpacity={0.8}
     >
       <View style={{ flex: 1 }}>
         <View style={styles.cardHeaderRow}>
           <Text style={styles.name}>{item.name}</Text>
 
-          {/* Nút "Sửa" – C6 */}
-          <TouchableOpacity onPress={() => openEditModal(item)}>
-            <Text style={styles.editText}>Sửa</Text>
-          </TouchableOpacity>
+          <View style={styles.actionRow}>
+            {/* Nút "Sửa" – C6 */}
+            <TouchableOpacity onPress={() => openEditModal(item)}>
+              <Text style={styles.editText}>Sửa</Text>
+            </TouchableOpacity>
+
+            {/* Nút "Xóa" – C7 */}
+            <TouchableOpacity
+              style={{ marginLeft: 12 }}
+              onPress={() => handleDeleteContact(item)}
+            >
+              <Text style={styles.deleteText}>Xóa</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {item.phone ? (
@@ -144,87 +261,6 @@ export default function HomeScreen() {
         <Text style={styles.emptyText}>Chưa có liên hệ nào.</Text>
       </View>
     );
-  };
-
-  // ===== C5 – Toggle favorite =====
-  const handleToggleFavorite = async (contact: Contact) => {
-    try {
-      await toggleFavorite(contact.id, contact.favorite);
-      await loadContacts();
-    } catch (e) {
-      console.error("toggleFavorite error", e);
-      setError("Không cập nhật được trạng thái yêu thích");
-    }
-  };
-
-  // ===== C4 + C6 – Mở/đóng modal =====
-  const openAddModal = () => {
-    setModalMode("add");
-    setEditingContact(null);
-
-    setNameInput("");
-    setPhoneInput("");
-    setEmailInput("");
-    setFormError(null);
-
-    setAddVisible(true);
-  };
-
-  const openEditModal = (contact: Contact) => {
-    setModalMode("edit");
-    setEditingContact(contact);
-
-    setNameInput(contact.name);
-    setPhoneInput(contact.phone ?? "");
-    setEmailInput(contact.email ?? "");
-    setFormError(null);
-
-    setAddVisible(true);
-  };
-
-  const closeAddModal = () => {
-    setAddVisible(false);
-  };
-
-  // ===== C4 + C6 – Lưu contact (INSERT hoặc UPDATE) =====
-  const handleSaveContact = async () => {
-    // validate tên
-    if (!nameInput.trim()) {
-      setFormError("Tên không được để trống");
-      return;
-    }
-    // validate phone
-    if (phoneInput && !/^[0-9]+$/.test(phoneInput.trim())) {
-      setFormError("Số điện thoại chỉ được chứa chữ số 0-9");
-      return;
-    }
-
-    try {
-      setFormError(null);
-
-      if (modalMode === "add") {
-        // C4: thêm mới
-        await createContact({
-          name: nameInput,
-          phone: phoneInput || null,
-          email: emailInput || null,
-        });
-      } else if (modalMode === "edit" && editingContact) {
-        // C6: sửa contact
-        await updateContact({
-          id: editingContact.id,
-          name: nameInput,
-          phone: phoneInput || null,
-          email: emailInput || null,
-        });
-      }
-
-      await loadContacts();
-      closeAddModal();
-    } catch (e) {
-      console.error("saveContact error", e);
-      setFormError("Không lưu được liên hệ, thử lại sau.");
-    }
   };
 
   // ===== trạng thái đang khởi tạo DB =====
@@ -327,6 +363,38 @@ export default function HomeScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Modal xác nhận xóa */}
+      <Modal
+        visible={deleteVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelDelete}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.deleteModalContainer}>
+            <Text style={styles.deleteModalTitle}>Xác nhận xóa</Text>
+            <Text style={styles.deleteModalText}>
+              Bạn có chắc muốn xóa liên hệ "{deletingContact?.name}"?
+            </Text>
+            
+            <View style={styles.deleteModalButtons}>
+              <TouchableOpacity 
+                style={styles.cancelButton}
+                onPress={cancelDelete}
+              >
+                <Text style={styles.cancelButtonText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.deleteButton}
+                onPress={confirmDelete}
+              >
+                <Text style={styles.deleteButtonText}>Xóa</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -365,6 +433,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
   name: {
     fontSize: 16,
     fontWeight: "600",
@@ -385,6 +457,10 @@ const styles = StyleSheet.create({
   },
   editText: {
     color: "#2563eb",
+    fontSize: 13,
+  },
+  deleteText: {
+    color: "#b91c1c",
     fontSize: 13,
   },
   favoriteBox: {
@@ -477,6 +553,52 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   saveText: {
+    color: "white",
+    fontWeight: "600",
+  },
+  // Delete modal styles
+  deleteModalContainer: {
+    width: "90%",
+    borderRadius: 12,
+    backgroundColor: "white",
+    padding: 20,
+    alignItems: "center",
+  },
+  deleteModalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 12,
+    color: "#111827",
+  },
+  deleteModalText: {
+    fontSize: 14,
+    color: "#4b5563",
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  deleteModalButtons: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 16,
+  },
+  cancelButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+  },
+  cancelButtonText: {
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  deleteButton: {
+    backgroundColor: "#dc2626",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  deleteButtonText: {
     color: "white",
     fontWeight: "600",
   },
