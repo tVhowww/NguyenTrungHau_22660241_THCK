@@ -15,5 +15,18 @@
     "expo-sqlite"
   ],
   "name": "SimpleContacts",
-  "slug": "SimpleContacts"
+  "slug": "SimpleContacts",
+  "extra": {
+    "router": {
+      "origin": "https://n"
+    },
+    "eas": {
+      "projectId": "0f7b7b7f-849c-4fe1-8318-82793cca1180"
+    }
+  },
+  "expo": {
+    "android": {
+      "package": "com.tvhow.SimpleContacts"
+    }
+  }
 }
