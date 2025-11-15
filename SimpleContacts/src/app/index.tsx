@@ -17,7 +17,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { getDb, initContactsTable, createContact } from "@/db";
+import { getDb, initContactsTable, createContact, toggleFavorite } from "@/db";
 
 interface Contact {
   id: number;
@@ -85,7 +85,7 @@ export default function HomeScreen() {
   }, [loadContacts]);
 
   // ===== UI 1 item contact =====
-  const renderItem = ({ item }: { item: Contact }) => (
+    const renderItem = ({ item }: { item: Contact }) => (
     <View style={styles.card}>
       <View style={{ flex: 1 }}>
         <Text style={styles.name}>{item.name}</Text>
@@ -101,13 +101,19 @@ export default function HomeScreen() {
           <Text style={styles.email}>Email: {item.email}</Text>
         ) : null}
       </View>
-      <View style={styles.favoriteBox}>
-        <Text style={{ color: item.favorite ? "#eab308" : "#9ca3af" }}>
+
+      {/* Sao favorite – Câu 5 */}
+      <TouchableOpacity
+        style={styles.favoriteBox}
+        onPress={() => handleToggleFavorite(item)}
+      >
+        <Text style={{ color: item.favorite ? "#eab308" : "#9ca3af", fontSize: 20 }}>
           ★
         </Text>
-      </View>
+      </TouchableOpacity>
     </View>
   );
+
 
   const renderEmpty = () => {
     if (loading) return null;
@@ -158,6 +164,18 @@ export default function HomeScreen() {
       setFormError("Không lưu được liên hệ, thử lại sau.");
     }
   };
+
+    // ===== Câu 5 – Toggle favorite =====
+  const handleToggleFavorite = async (contact: Contact) => {
+    try {
+      await toggleFavorite(contact.id, contact.favorite);
+      await loadContacts();
+    } catch (e) {
+      console.error("toggleFavorite error", e);
+      setError("Không cập nhật được trạng thái yêu thích");
+    }
+  };
+
 
   // ===== trạng thái đang khởi tạo DB =====
   if (!ready) {

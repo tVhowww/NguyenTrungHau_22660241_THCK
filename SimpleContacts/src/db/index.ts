@@ -79,3 +79,16 @@ export const createContact = async (data: {
     ]
   );
 };
+
+/**
+ * Câu 5 – Toggle favorite 0 <-> 1
+ */
+export const toggleFavorite = async (id: number, currentFavorite: number) => {
+  const db = await getDb();
+  const next = currentFavorite === 1 ? 0 : 1;
+
+  await db.runAsync(
+    "UPDATE contacts SET favorite = ? WHERE id = ?;",
+    [next, id]
+  );
+};
