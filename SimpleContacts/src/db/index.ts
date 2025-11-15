@@ -53,3 +53,29 @@ export const initContactsTable = async () => {
     );
   }
 };
+
+/**
+ * Câu 4 – Thêm liên hệ mới vào bảng contacts
+ */
+export const createContact = async (data: {
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+}) => {
+  const db = await getDb();
+  const now = Date.now();
+
+  await db.runAsync(
+    `
+      INSERT INTO contacts (name, phone, email, favorite, created_at)
+      VALUES (?, ?, ?, ?, ?);
+    `,
+    [
+      data.name.trim(),
+      data.phone?.trim() || null,
+      data.email?.trim() || null,
+      0, // mặc định chưa favorite
+      now,
+    ]
+  );
+};
