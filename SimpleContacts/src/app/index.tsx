@@ -36,6 +36,9 @@ interface Contact {
   created_at: number;
 }
 
+// TODO: đổi thành URL MockAPI thật của bạn
+const API_URL = "https://67c81a760acf98d07084da00.mockapi.io/api/NguyenTrungHau_22660241_SimpleContacts";
+
 export default function HomeScreen() {
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -59,6 +62,10 @@ export default function HomeScreen() {
   // ====== C8 – Search & favorite filter ======
   const [searchText, setSearchText] = useState("");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+
+  // ====== C9 – Import API states ======
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   // ===== load danh sách từ DB =====
   const loadContacts = useCallback(async () => {
@@ -103,13 +110,12 @@ export default function HomeScreen() {
     };
   }, [loadContacts]);
 
-  // ===== C8 – Lọc realtime bằng useMemo =====
+  // ===== C8 – Lọc realtime =====
   const filteredContacts = useMemo(() => {
     const q = searchText.trim().toLowerCase();
 
     return contacts.filter((c) => {
       if (favoritesOnly && c.favorite !== 1) return false;
-
       if (!q) return true;
 
       const name = c.name?.toLowerCase() ?? "";
@@ -130,7 +136,7 @@ export default function HomeScreen() {
     }
   };
 
-  // ===== C7 – Xóa contact với Modal xác nhận =====
+  // ===== C7 – Xóa contact (Modal confirm) =====
   const handleDeleteContact = (contact: Contact) => {
     setDeletingContact(contact);
     setDeleteVisible(true);
@@ -221,6 +227,51 @@ export default function HomeScreen() {
     }
   };
 
+  // ===== C9 – Import từ API (dedup theo phone) =====
+  const handleImportFromApi = async () => {
+    try {
+      setImportError(null);
+      setImporting(true);
+
+      const res = await fetch(API_URL);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const data: any[] = await res.json();
+      if (!Array.isArray(data)) {
+        throw new Error("Dữ liệu API không phải mảng");
+      }
+
+      // Tập hợp số điện thoại hiện có (tránh duplicate)
+      const existingPhones = new Set(
+        contacts
+          .map((c) => c.phone?.trim())
+          .filter((p): p is string => !!p)
+      );
+
+      for (const item of data) {
+        const name = String(item.name ?? "").trim();
+        const phone = item.phone ? String(item.phone).trim() : null;
+        const email = item.email ? String(item.email).trim() : null;
+
+        if (!name) continue;             // bỏ record không có name
+        if (phone && existingPhones.has(phone)) continue; // trùng phone → bỏ
+
+        await createContact({ name, phone, email });
+
+        if (phone) existingPhones.add(phone);
+      }
+
+      await loadContacts();
+    } catch (e) {
+      console.error("importFromApi error", e);
+      setImportError("Không import được từ API. Kiểm tra lại URL hoặc mạng.");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   // ===== UI 1 item contact =====
   const renderItem = ({ item }: { item: Contact }) => (
     <TouchableOpacity
@@ -304,7 +355,7 @@ export default function HomeScreen() {
   // ===== UI chính =====
   return (
     <View style={styles.container}>
-      {/* Header + Search + Favorite filter (C8) */}
+      {/* Header + Search + Favorite filter + Import (C8 + C9) */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Danh sách liên hệ</Text>
 
@@ -335,6 +386,25 @@ export default function HomeScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        <View style={styles.headerBottomRow}>
+          <TouchableOpacity
+            style={[
+              styles.importButton,
+              importing && styles.importButtonDisabled,
+            ]}
+            onPress={handleImportFromApi}
+            disabled={importing}
+          >
+            <Text style={styles.importButtonText}>
+              {importing ? "Đang import..." : "Import từ API"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {importError && (
+          <Text style={styles.importError}>{importError}</Text>
+        )}
       </View>
 
       <FlatList
@@ -471,7 +541,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingTop: 50,
-    paddingBottom: 12,
+    paddingBottom: 8,
     paddingHorizontal: 16,
     backgroundColor: "#111827",
   },
@@ -516,6 +586,30 @@ const styles = StyleSheet.create({
   },
   favoriteFilterTextActive: {
     color: "#111827",
+  },
+  headerBottomRow: {
+    marginTop: 8,
+    flexDirection: "row",
+    justifyContent: "flex-start",
+  },
+  importButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: "#10b981",
+  },
+  importButtonDisabled: {
+    opacity: 0.7,
+  },
+  importButtonText: {
+    color: "white",
+    fontWeight: "600",
+    fontSize: 13,
+  },
+  importError: {
+    marginTop: 6,
+    color: "#fecaca",
+    fontSize: 12,
   },
   card: {
     flexDirection: "row",
