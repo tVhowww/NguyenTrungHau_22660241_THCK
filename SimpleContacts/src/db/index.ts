@@ -126,3 +126,52 @@ export const deleteContact = async (id: number) => {
   const db = await getDb();
   await db.runAsync("DELETE FROM contacts WHERE id = ?;", [id]);
 };
+
+/**
+ * Import từ API - dedup theo phone
+ */
+export const importFromApi = async (apiUrl: string) => {
+  try {
+    const res = await fetch(apiUrl);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data: any[] = await res.json();
+    if (!Array.isArray(data)) {
+      throw new Error("Dữ liệu API không phải mảng");
+    }
+
+    // Lấy danh sách phone hiện có từ DB
+    const db = await getDb();
+    const existingContacts = await db.getAllAsync<{ phone: string }>(
+      "SELECT phone FROM contacts WHERE phone IS NOT NULL AND phone != '';"
+    );
+    
+    const existingPhones = new Set(
+      existingContacts
+        .map((c) => c.phone?.trim())
+        .filter((p): p is string => !!p)
+    );
+
+    let importCount = 0;
+    for (const item of data) {
+      const name = String(item.name ?? "").trim();
+      const phone = item.phone ? String(item.phone).trim() : null;
+      const email = item.email ? String(item.email).trim() : null;
+
+      if (!name) continue;
+      if (phone && existingPhones.has(phone)) continue;
+
+      await createContact({ name, phone, email });
+
+      if (phone) existingPhones.add(phone);
+      importCount++;
+    }
+
+    return importCount;
+  } catch (error) {
+    console.error("importFromApi error", error);
+    throw error;
+  }
+};
